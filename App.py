@@ -8,8 +8,7 @@ import difflib
 st.title("Portfolio Completo Multilingua - Azioni, Obbligazioni, Materie Prime e Markowitz")
 
 # ==========================
-# Dizionario Nome → Ticker Yahoo Finance
-# Supporta italiano e inglese
+# Dizionario Nome → Ticker Yahoo Finance (Italiano / Inglese)
 # ==========================
 nome_to_ticker = {
     # INDICI AZIONARI
@@ -96,7 +95,7 @@ nome_to_ticker = {
 }
 
 # ==========================
-# Funzione fuzzy match
+# Fuzzy matching
 # ==========================
 def trova_ticker(input_nome, dizionario):
     nomi = list(dizionario.keys())
@@ -140,10 +139,8 @@ for n in nomi_usati:
     peso = st.number_input(f"% di {n}", min_value=0.0, max_value=100.0, value=100.0/len(nomi_usati))
     pesi.append(peso/100)
 
-# Normalizzazione automatica dei pesi
 pesi_arr = np.array(pesi)
 if np.sum(pesi_arr) != 1:
-    st.warning("I pesi non sommano a 100%, normalizzo automaticamente.")
     pesi_arr /= np.sum(pesi_arr)
 
 # ==========================
@@ -154,20 +151,18 @@ periodo = st.selectbox("Seleziona il periodo storico", ["1y","3y","5y","10y","ma
 if st.button("Analizza Portafoglio"):
 
     # ==========================
-    # Scarica dati
+    # Scarica dati senza warning
     # ==========================
     df = yf.download(lista_tickers, period=periodo)
     if df.empty:
         st.error("Nessun dato scaricato!")
         st.stop()
 
-    # Gestione MultiIndex / singolo livello
     if isinstance(df.columns, pd.MultiIndex):
         if 'Adj Close' in df.columns.levels[0]:
-            df = df.xs('Adj Close', axis=1, level=0)
+            df = df['Adj Close']
         else:
-            df = df.xs('Close', axis=1, level=0)
-            st.warning("Uso 'Close' al posto di 'Adj Close'.")
+            df = df['Close']
     else:
         df = df['Adj Close'] if 'Adj Close' in df.columns else df['Close']
 
@@ -181,9 +176,8 @@ if st.button("Analizza Portafoglio"):
     mu = rendimenti.mean() * 252
     sigma = rendimenti.cov() * 252
 
-    # Portafoglio con pesi utente
     rend_port = np.dot(mu, pesi_arr)
-    vol_port = np.sqrt(np.dot(pesi_arr.T, np.dot(sigma, pesi_arr)))
+    vol_port = np.sqrt(np.dot(pesi_arr.T, np.dot(sigma, pesi_arr))
 
     st.subheader("Portafoglio Selettivo")
     for i, nome in enumerate(nomi_usati):
