@@ -5,11 +5,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 import difflib
 
-st.title("Portfolio di Indici e Titoli - Markowitz con Pesi e Ricerca Fuzzy")
+st.title("Portfolio Completo - Azioni, Obbligazioni, Materie Prime e Markowitz")
 
+# ==========================
 # Dizionario Nome → Ticker Yahoo Finance
+# ==========================
 nome_to_ticker = {
-    # INDICI GLOBALI
+    # INDICI AZIONARI
     "S&P 500": "^GSPC",
     "NASDAQ 100": "^NDX",
     "Dow Jones": "^DJI",
@@ -20,7 +22,38 @@ nome_to_ticker = {
     "FTSE MIB": "FTSEMIB.MI",
     "CAC 40": "^FCHI",
     "IBEX 35": "^IBEX",
-    "Shanghai Composite": "000001.SS",
+    "MSCI World": "URTH",
+    "MSCI Emerging Markets": "EEM",
+    "Euro Stoxx 50": "FEZ",
+    "Asia Pacific Developed": "EPP",
+
+    # ETF OBBLIGAZIONARI - GOVERNATIVI EURO
+    "Euro Gov Bond Short Term": "IBTS.DE",
+    "Euro Gov Bond Medium-Long": "IBGL.DE",
+
+    # ETF OBBLIGAZIONARI - CORPORATE EURO
+    "Euro Corporate Bond Short Term": "IBCS.DE",
+    "Euro Corporate Bond Medium-Long": "IBCL.DE",
+
+    # ETF OBBLIGAZIONARI - EMERGING
+    "Emerging Market Bond": "EMB",
+
+    # ETF OBBLIGAZIONARI - GIAPPONE/UK
+    "Japanese Gov Bond": "JPGB.L",
+    "UK Gov Bond": "IGLT.L",
+
+    # ETF AZIONARI - EURO/USA/EMERGING/ASIA PACIFICO
+    "Equity Euro": "IEUR",
+    "Equity USA": "IVV",
+    "Equity Emerging": "EEM",
+    "Equity Asia Pacific Developed": "EPP",
+
+    # MATERIE PRIME
+    "Gold": "GLD",
+    "Silver": "SLV",
+    "Oil WTI": "USO",
+    "Copper": "CPER",
+    "Agriculture": "DBA",
 
     # TITOLI USA
     "Apple": "AAPL",
@@ -42,7 +75,9 @@ nome_to_ticker = {
     "SAP": "SAP.DE"
 }
 
+# ==========================
 # Funzione fuzzy match
+# ==========================
 def trova_ticker(input_nome, dizionario):
     nomi = list(dizionario.keys())
     match = difflib.get_close_matches(input_nome, nomi, n=1, cutoff=0.5)
@@ -50,9 +85,11 @@ def trova_ticker(input_nome, dizionario):
         return dizionario[match[0]], match[0]
     return None, None
 
-# Input nomi
+# ==========================
+# Input nomi strumenti
+# ==========================
 lista_nomi = st.text_input(
-    "Inserisci nomi di indici o azioni separati da virgola"
+    "Inserisci nomi di indici, azioni, ETF o materie prime separati da virgola"
 ).title().split(",")
 
 lista_tickers = []
@@ -74,7 +111,9 @@ if not lista_tickers:
 st.write("Ticker utilizzati:", lista_tickers)
 st.write("Nomi interpretati:", nomi_usati)
 
-# Input pesi
+# ==========================
+# Input pesi personalizzati
+# ==========================
 st.write("Inserisci i pesi percentuali per ciascun strumento (totale 100%)")
 pesi = []
 for n in nomi_usati:
@@ -87,21 +126,22 @@ if np.sum(pesi_arr) != 1:
     st.warning("I pesi non sommano a 100%, normalizzo automaticamente.")
     pesi_arr /= np.sum(pesi_arr)
 
-# Selezione periodo
-periodo = st.selectbox(
-    "Seleziona il periodo",
-    ["1y", "3y", "5y", "10y", "max"]
-)
+# ==========================
+# Selezione periodo storico
+# ==========================
+periodo = st.selectbox("Seleziona il periodo storico", ["1y","3y","5y","10y","max"])
 
 if st.button("Analizza Portafoglio"):
 
+    # ==========================
     # Scarica dati
+    # ==========================
     df = yf.download(lista_tickers, period=periodo)
     if df.empty:
         st.error("Nessun dato scaricato!")
         st.stop()
 
-    # Selezione prezzi
+    # Gestione MultiIndex / singolo livello
     if isinstance(df.columns, pd.MultiIndex):
         if 'Adj Close' in df.columns.levels[0]:
             df = df.xs('Adj Close', axis=1, level=0)
@@ -114,12 +154,14 @@ if st.button("Analizza Portafoglio"):
     st.subheader("Serie Storiche")
     st.line_chart(df)
 
-    # Rendimenti e matrice di covarianza
+    # ==========================
+    # Rendimenti e covarianza
+    # ==========================
     rendimenti = df.pct_change().dropna()
     mu = rendimenti.mean() * 252
     sigma = rendimenti.cov() * 252
 
-    # Portafoglio con pesi dati dall’utente
+    # Portafoglio con pesi utente
     rend_port = np.dot(mu, pesi_arr)
     vol_port = np.sqrt(np.dot(pesi_arr.T, np.dot(sigma, pesi_arr)))
 
@@ -129,7 +171,9 @@ if st.button("Analizza Portafoglio"):
     st.write(f"Rendimento atteso: **{rend_port:.2%}**")
     st.write(f"Volatilità: **{vol_port:.2%}**")
 
+    # ==========================
     # Simulazione Markowitz
+    # ==========================
     num_portfolios = 5000
     results = np.zeros((3, num_portfolios))
     weights_record = []
@@ -140,10 +184,11 @@ if st.button("Analizza Portafoglio"):
         weights_record.append(w)
         results[0,i] = np.dot(mu, w)
         results[1,i] = np.sqrt(np.dot(w.T, np.dot(sigma, w)))
-        results[2,i] = results[0,i] / results[1,i]
+        results[2,i] = results[0,i]/results[1,i]
 
     max_sharpe_idx = np.argmax(results[2])
     w_star = weights_record[max_sharpe_idx]
+
     st.subheader("Markowitz - Portafoglio Ottimale (Max Sharpe)")
     for i, nome in enumerate(nomi_usati):
         st.write(f"{nome}: {w_star[i]*100:.2f}%")
@@ -151,7 +196,9 @@ if st.button("Analizza Portafoglio"):
     st.write(f"Volatilità Sharpe ottimale: **{results[1,max_sharpe_idx]:.2%}**")
     st.write(f"Sharpe Ratio: **{results[2,max_sharpe_idx]:.2f}**")
 
+    # ==========================
     # Grafico frontiera efficiente
+    # ==========================
     plt.figure(figsize=(10,6))
     plt.scatter(results[1,:], results[0,:], c=results[2,:], cmap='viridis', s=10, alpha=0.3)
     plt.colorbar(label='Sharpe Ratio')
