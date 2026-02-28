@@ -169,33 +169,33 @@ if st.button("Analizza Portafoglio"):
         else:
             df = df['Close']
 
-    st.subheader("Serie Storiche")
-    st.line_chart(df)
-
     # ==========================
-    # Grafico prezzi normalizzati
+    # Grafico prezzi normalizzati a 100
     # ==========================
     df_norm = df / df.iloc[0] * 100
     st.subheader("Grafico Prezzi Normalizzati (Punto di Partenza = 100)")
     st.line_chart(df_norm)
 
     # ==========================
-    # Statistiche finanziarie
+    # Calcolo rendimenti cumulati, annualizzati, volatilità
     # ==========================
     rendimenti_giornalieri = df.pct_change().dropna()
-    rendimenti_medio_giornalieri = rendimenti_giornalieri.mean()
-    rendimenti_annuali = rendimenti_medio_giornalieri * 252
+    rendimenti_annuali = rendimenti_giornalieri.mean() * 252
     vol_annuale = rendimenti_giornalieri.std() * np.sqrt(252)
 
+    # Rendimento cumulato
+    rendimento_cumulato = (df.iloc[-1] / df.iloc[0]) - 1
+
+    # DataFrame statistico
     df_statistiche = pd.DataFrame({
-        "Rendimento Medio Storico": rendimenti_medio_giornalieri,
+        "Rendimento Cumulato": rendimento_cumulato,
         "Rendimento Annualizzato": rendimenti_annuali,
         "Volatilità Annualizzata": vol_annuale
     }).sort_values("Rendimento Annualizzato", ascending=False)
 
     st.subheader("Statistiche Finanziarie")
     st.dataframe(df_statistiche.style.format({
-        "Rendimento Medio Storico": "{:.4%}",
+        "Rendimento Cumulato": "{:.2%}",
         "Rendimento Annualizzato": "{:.2%}",
         "Volatilità Annualizzata": "{:.2%}"
     }))
@@ -223,39 +223,43 @@ if st.button("Analizza Portafoglio"):
     st.write(f"Volatilità: **{vol_port:.2%}**")
 
     # ==========================
-    # Simulazione Markowitz
+    # Frontiera efficiente - 50 portafogli
     # ==========================
-    num_portfolios = 5000
-    results = np.zeros((3, num_portfolios))
+    num_portfolios = 50
+    results = []
     weights_record = []
 
     for i in range(num_portfolios):
         w = np.random.random(len(lista_tickers))
         w /= np.sum(w)
         weights_record.append(w)
-        results[0,i] = np.dot(mu, w)
-        results[1,i] = np.sqrt(np.dot(w.T, np.dot(sigma, w)))
-        results[2,i] = results[0,i]/results[1,i]
+        port_rend = np.dot(mu, w)
+        port_vol = np.sqrt(np.dot(w.T, np.dot(sigma, w)))
+        sharpe = port_rend / port_vol
+        results.append([port_rend, port_vol, sharpe])
 
-    max_sharpe_idx = np.argmax(results[2])
-    w_star = weights_record[max_sharpe_idx]
+    df_frontiera = pd.DataFrame(results, columns=["Rendimento", "Volatilità", "Sharpe"])
+    df_frontiera["Peso"] = weights_record
 
-    st.subheader("Markowitz - Portafoglio Ottimale (Max Sharpe)")
-    for i, nome in enumerate(nomi_usati):
-        st.write(f"{nome}: {w_star[i]*100:.2f}%")
-    st.write(f"Rendimento Sharpe ottimale: **{results[0,max_sharpe_idx]:.2%}**")
-    st.write(f"Volatilità Sharpe ottimale: **{results[1,max_sharpe_idx]:.2%}**")
-    st.write(f"Sharpe Ratio: **{results[2,max_sharpe_idx]:.2f}**")
+    max_sharpe_idx = df_frontiera["Sharpe"].idxmax()
+    df_frontiera["Massimo Sharpe"] = ""
+    df_frontiera.loc[max_sharpe_idx, "Massimo Sharpe"] = "⭐"
+
+    st.subheader("Frontiera Efficiente (50 Portafogli)")
+    st.dataframe(df_frontiera.style.format({
+        "Rendimento": "{:.2%}",
+        "Volatilità": "{:.2%}",
+        "Sharpe": "{:.2f}"
+    }))
 
     # ==========================
-    # Grafico frontiera efficiente
+    # Grafico frontiera efficiente con nomi completi
     # ==========================
     plt.figure(figsize=(10,6))
-    plt.scatter(results[1,:], results[0,:], c=results[2,:], cmap='viridis', s=10, alpha=0.3)
-    plt.colorbar(label='Sharpe Ratio')
-    plt.scatter(results[1,max_sharpe_idx], results[0,max_sharpe_idx], marker='*', color='r', s=500, label='Massimo Sharpe')
-    plt.xlabel('Volatilità')
-    plt.ylabel('Rendimento')
-    plt.title('Portafogli Simulati - Frontiera Efficiente')
+    for i, nome in enumerate(nomi_usati):
+        plt.plot(df_norm.index, df_norm[nome], label=nome)
+    plt.xlabel("Data")
+    plt.ylabel("Prezzo Normalizzato")
+    plt.title("Evoluzione Prezzi Normalizzati")
     plt.legend()
     st.pyplot(plt)
