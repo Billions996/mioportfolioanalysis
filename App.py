@@ -158,7 +158,7 @@ if st.button("Analizza Portafoglio"):
             df = df['Close']
 
     # ==========================
-    # Mapping nome -> ticker per grafico e statistiche
+    # Mapping nome -> ticker
     # ==========================
     nome_to_ticker_usati = dict(zip(nomi_usati, lista_tickers))
 
@@ -166,6 +166,7 @@ if st.button("Analizza Portafoglio"):
     # Prezzi normalizzati
     # ==========================
     df_norm = df / df.iloc[0] * 100
+    st.subheader("Grafico Prezzi Normalizzati (Punto di Partenza = 100)")
     plt.figure(figsize=(10,6))
     for nome in nomi_usati:
         ticker = nome_to_ticker_usati[nome]
@@ -205,22 +206,21 @@ if st.button("Analizza Portafoglio"):
     st.dataframe(correlazioni.style.background_gradient(cmap="coolwarm"))
 
     # ==========================
-    # Portafoglio utente
+    # Portafoglio selezionato
     # ==========================
     mu = rendimenti_annuali
     sigma = rendimenti_giornalieri.cov() * 252
-
     rend_port = np.dot(mu, pesi_arr)
     vol_port = np.sqrt(np.dot(pesi_arr.T, np.dot(sigma, pesi_arr)))
 
-    st.subheader("Portafoglio Selettivo")
+    st.subheader("Portafoglio Selezionato")
     for i, nome in enumerate(nomi_usati):
         st.write(f"{nome}: {pesi_arr[i]*100:.2f}%")
     st.write(f"Rendimento atteso: **{rend_port:.2%}**")
     st.write(f"Volatilità: **{vol_port:.2%}**")
 
     # ==========================
-    # Frontiera efficiente (50 portafogli)
+    # Frontiera efficiente - solo grafico
     # ==========================
     num_portfolios = 50
     results = []
@@ -235,15 +235,37 @@ if st.button("Analizza Portafoglio"):
         sharpe = port_rend / port_vol
         results.append([port_rend, port_vol, sharpe])
 
-    df_frontiera = pd.DataFrame(results, columns=["Rendimento", "Volatilità", "Sharpe"])
-    df_frontiera["Peso"] = weights_record
-    max_sharpe_idx = df_frontiera["Sharpe"].idxmax()
-    df_frontiera["Massimo Sharpe"] = ""
-    df_frontiera.loc[max_sharpe_idx, "Massimo Sharpe"] = "⭐"
+    results = np.array(results)
+    max_idx = np.argmax(results[:,2])
 
-    st.subheader("Frontiera Efficiente (50 Portafogli)")
-    st.dataframe(df_frontiera.style.format({
-        "Rendimento": "{:.2%}",
-        "Volatilità": "{:.2%}",
-        "Sharpe": "{:.2f}"
-    }))
+    plt.figure(figsize=(10,6))
+    plt.scatter(results[:,1], results[:,0], c=results[:,2], cmap="viridis", s=50, alpha=0.7)
+    plt.scatter(results[max_idx,1], results[max_idx,0], color="red", marker="*", s=300, label="Massimo Sharpe")
+    plt.xlabel("Volatilità")
+    plt.ylabel("Rendimento")
+    plt.title("Frontiera Efficiente - 50 Portafogli")
+    plt.colorbar(label="Sharpe Ratio")
+    plt.legend()
+    st.pyplot(plt)
+
+    # ==========================
+    # Grafico P/E
+    # ==========================
+    st.subheader("Grafico P/E Ratio (se disponibile)")
+    df_pe = pd.DataFrame()
+    for nome in nomi_usati:
+        ticker = nome_to_ticker_usati[nome]
+        try:
+            info = yf.Ticker(ticker).info
+            pe = info.get("trailingPE", None)
+            if pe:
+                df_pe.loc[nome, "P/E"] = pe
+        except:
+            df_pe.loc[nome, "P/E"] = np.nan
+
+    if not df_pe.empty:
+        df_pe.plot(kind="bar", legend=False)
+        plt.ylabel("P/E Ratio")
+        st.pyplot(plt)
+    else:
+        st.write("P/E non disponibile per gli strumenti selezionati.")
