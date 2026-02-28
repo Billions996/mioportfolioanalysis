@@ -173,13 +173,46 @@ if st.button("Analizza Portafoglio"):
     st.line_chart(df)
 
     # ==========================
-    # Rendimenti e covarianza
+    # Grafico prezzi normalizzati
     # ==========================
-    rendimenti = df.pct_change().dropna()
-    mu = rendimenti.mean() * 252
-    sigma = rendimenti.cov() * 252
+    df_norm = df / df.iloc[0] * 100
+    st.subheader("Grafico Prezzi Normalizzati (Punto di Partenza = 100)")
+    st.line_chart(df_norm)
 
-    # Portafoglio utente con pesi personalizzati
+    # ==========================
+    # Statistiche finanziarie
+    # ==========================
+    rendimenti_giornalieri = df.pct_change().dropna()
+    rendimenti_medio_giornalieri = rendimenti_giornalieri.mean()
+    rendimenti_annuali = rendimenti_medio_giornalieri * 252
+    vol_annuale = rendimenti_giornalieri.std() * np.sqrt(252)
+
+    df_statistiche = pd.DataFrame({
+        "Rendimento Medio Storico": rendimenti_medio_giornalieri,
+        "Rendimento Annualizzato": rendimenti_annuali,
+        "Volatilità Annualizzata": vol_annuale
+    }).sort_values("Rendimento Annualizzato", ascending=False)
+
+    st.subheader("Statistiche Finanziarie")
+    st.dataframe(df_statistiche.style.format({
+        "Rendimento Medio Storico": "{:.4%}",
+        "Rendimento Annualizzato": "{:.2%}",
+        "Volatilità Annualizzata": "{:.2%}"
+    }))
+
+    # ==========================
+    # Matrice di correlazione
+    # ==========================
+    correlazioni = rendimenti_giornalieri.corr()
+    st.subheader("Matrice di Correlazione")
+    st.dataframe(correlazioni.style.background_gradient(cmap="coolwarm"))
+
+    # ==========================
+    # Portafoglio utente
+    # ==========================
+    mu = rendimenti_annuali
+    sigma = rendimenti_giornalieri.cov() * 252
+
     rend_port = np.dot(mu, pesi_arr)
     vol_port = np.sqrt(np.dot(pesi_arr.T, np.dot(sigma, pesi_arr)))
 
