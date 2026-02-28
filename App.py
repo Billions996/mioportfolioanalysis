@@ -1,56 +1,43 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import numpy as np
-import plotly.express as px
 
-st.set_page_config(page_title="Analisi Portafoglio PRO", layout="wide")
+st.title("Portfolio Analysis")
 
-st.title("📈 Analizzatore di Portafoglio Avanzato")
+# Input dell'utente
+lista_tickers = st.text_input(
+    "Inserisci i ticker separati da una virgola (es: AAPL,MSFT,GOOGL)"
+).upper().replace(" ", "").split(",")
 
-# Sidebar per input
-with st.sidebar:
-    st.header("Configurazione")
-    tickers = st.text_input("Inserisci Ticker (es: AAPL, TSLA, BTC-USD, gold)", "AAPL, MSFT, GOOGL, AMZN")
-    periodo = st.selectbox("Periodo Storico", ["1y", "2y", "5y", "10y"], index=2)
+periodo = st.selectbox(
+    "Seleziona il periodo",
+    ["1mo", "3mo", "6mo", "1y", "5y", "10y", "max"]
+)
 
-if tickers:
-    # Download dati
-    lista_tickers = [t.strip() for t in tickers.split(",")]
-    df = yf.download(lista_tickers, period=periodo)['Adj Close']
-    
-    if not df.empty:
-        # Calcoli base
-        returns = df.pct_change().dropna()
-        mean_returns = returns.mean()
-        cov_matrix = returns.cov()
-        
-        # Simulazione Portafogli Casuali
-        num_portfolios = 1000
-        results = np.zeros((3, num_portfolios))
-        for i in range(num_portfolios):
-            weights = np.random.random(len(lista_tickers))
-            weights /= np.sum(weights)
-            
-            p_return = np.sum(mean_returns * weights) * 252
-            p_std = np.sqrt(np.dot(weights.T, np.dot(cov_matrix * 252, weights)))
-            
-            results[0,i] = p_std
-            results[1,i] = p_return
-            results[2,i] = p_return / p_std # Sharpe Ratio base
+if st.button("Scarica dati"):
+    if not lista_tickers or lista_tickers == ['']:
+        st.error("Inserisci almeno un ticker valido.")
+    else:
+        try:
+            # Scarica dati da Yahoo Finance
+            df = yf.download(lista_tickers, period=periodo)
 
-        # Visualizzazione
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("Performance Cumulata")
-            st.line_chart(df / df.iloc[0])
+            # Gestione MultiIndex per più ticker
+            if isinstance(df.columns, pd.MultiIndex):
+                df = df.xs('Adj Close', axis=1, level=0)
+            else:
+                # Controlla che 'Adj Close' esista
+                if 'Adj Close' in df.columns:
+                    df = df['Adj Close']
+                else:
+                    st.error("Colonna 'Adj Close' non trovata nei dati scaricati.")
+                    st.stop()
 
-        with col2:
-            st.subheader("Frontiera Efficiente (Simulata)")
-            fig = px.scatter(x=results[0, :], y=results[1, :], color=results[2, :],
-                             labels={'x': 'Rischio (Volatilità)', 'y': 'Rendimento Atteso', 'color': 'Sharpe Ratio'})
-            st.plotly_chart(fig)
+            st.success("Dati scaricati correttamente!")
+            st.dataframe(df)
 
-        st.subheader("Matrice di Correlazione")
-        st.dataframe(returns.corr().style.background_gradient(cmap='coolwarm'))
+            # Puoi aggiungere grafici
+            st.line_chart(df)
+
+        except Exception as e:
+            st.error(f"Errore durante il download dei dati: {e}")
