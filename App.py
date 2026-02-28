@@ -29,20 +29,30 @@ if st.button("Analizza Portafoglio"):
         st.error("Inserisci almeno un ticker valido.")
     else:
         try:
-            # Scarica dati
+            # Scarica dati da Yahoo Finance
             df = yf.download(lista_tickers, period=periodo)
 
             if df.empty:
                 st.error("Nessun dato scaricato. Controlla i ticker o il periodo.")
             else:
-                # Se MultiIndex, seleziona 'Adj Close'
+                # Gestione MultiIndex o singolo livello
                 if isinstance(df.columns, pd.MultiIndex):
-                    df = df.xs('Adj Close', axis=1, level=0)
+                    if 'Adj Close' in df.columns.levels[0]:
+                        df = df.xs('Adj Close', axis=1, level=0)
+                    elif 'Close' in df.columns.levels[0]:
+                        df = df.xs('Close', axis=1, level=0)
+                        st.warning("Colonna 'Adj Close' non trovata. Uso 'Close' al suo posto.")
+                    else:
+                        st.error("Nessuna colonna di prezzi disponibile")
+                        st.stop()
                 else:
                     if 'Adj Close' in df.columns:
                         df = df['Adj Close']
+                    elif 'Close' in df.columns:
+                        df = df['Close']
+                        st.warning("Colonna 'Adj Close' non trovata. Uso 'Close' al suo posto.")
                     else:
-                        st.error("Colonna 'Adj Close' non trovata")
+                        st.error("Nessuna colonna di prezzi disponibile")
                         st.stop()
 
                 st.subheader("Serie Storiche")
@@ -70,11 +80,11 @@ if st.button("Analizza Portafoglio"):
                     "Rendimento Medio Annuo": rendimenti_medio_annuo,
                     "Volatilità Annua": volatilita_annua
                 })
-                st.dataframe(tabella_titoli)
+                st.dataframe(tabella_titoli.style.format("{:.2%}"))
 
                 st.subheader("Rendimenti e Volatilità Portafoglio")
-                st.write(f"Rendimento atteso portafoglio: {rend_portafoglio:.2%}")
-                st.write(f"Volatilità portafoglio: {volatilita_portafoglio:.2%}")
+                st.write(f"Rendimento atteso portafoglio: **{rend_portafoglio:.2%}**")
+                st.write(f"Volatilità portafoglio: **{volatilita_portafoglio:.2%}**")
 
         except Exception as e:
             st.error(f"Errore durante l'analisi: {e}")
