@@ -186,9 +186,9 @@ if st.button("Analizza Portafoglio"):
     rendimento_cumulato = (df.iloc[-1] / df.iloc[0]) - 1
 
     df_statistiche = pd.DataFrame({
-        "Rendimento Cumulato": rendimento_cumulato,
-        "Rendimento Annualizzato": rendimenti_annuali,
-        "Volatilità Annualizzata": vol_annuale
+        "Rendimento Cumulato": rendimento_cumulato.values,
+        "Rendimento Annualizzato": rendimenti_annuali.values,
+        "Volatilità Annualizzata": vol_annuale.values
     }, index=nomi_usati).sort_values("Rendimento Annualizzato", ascending=False)
 
     st.subheader("Statistiche Finanziarie")
@@ -249,23 +249,24 @@ if st.button("Analizza Portafoglio"):
     st.pyplot(plt)
 
     # ==========================
-    # Grafico P/E
+    # Storico P/E Ratio
     # ==========================
-    st.subheader("Grafico P/E Ratio (se disponibile)")
+    st.subheader("Storico P/E Ratio")
     df_pe = pd.DataFrame()
+
     for nome in nomi_usati:
         ticker = nome_to_ticker_usati[nome]
         try:
-            info = yf.Ticker(ticker).info
-            pe = info.get("trailingPE", None)
-            if pe:
-                df_pe.loc[nome, "P/E"] = pe
+            ticker_obj = yf.Ticker(ticker)
+            earnings = ticker_obj.quarterly_earnings
+            if not earnings.empty:
+                earnings = earnings.reindex(df.index, method='ffill')
+                pe_series = df[ticker] / earnings['Earnings']
+                df_pe[nome] = pe_series
         except:
-            df_pe.loc[nome, "P/E"] = np.nan
+            st.warning(f"P/E storico non disponibile per {nome}")
 
     if not df_pe.empty:
-        df_pe.plot(kind="bar", legend=False)
-        plt.ylabel("P/E Ratio")
-        st.pyplot(plt)
+        st.line_chart(df_pe)
     else:
-        st.write("P/E non disponibile per gli strumenti selezionati.")
+        st.write("Nessun P/E storico disponibile per gli strumenti selezionati.")
