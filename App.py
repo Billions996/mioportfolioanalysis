@@ -5,9 +5,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import difflib
 
-st.title("Portfolio di Indici e Titoli - Markowitz con Ricerca Fuzzy")
+st.title("Portfolio di Indici e Titoli - Markowitz con Pesi e Ricerca Fuzzy")
 
-# Dizionario: Nome → Ticker Yahoo Finance
+# Dizionario Nome → Ticker Yahoo Finance
 nome_to_ticker = {
     # INDICI GLOBALI
     "S&P 500": "^GSPC",
@@ -17,7 +17,7 @@ nome_to_ticker = {
     "DAX 30": "^GDAXI",
     "Nikkei 225": "^N225",
     "Hang Seng": "^HSI",
-    "FTSE MIB": "^FTSEMIB",
+    "FTSE MIB": "FTSEMIB.MI",
     "CAC 40": "^FCHI",
     "IBEX 35": "^IBEX",
     "Shanghai Composite": "000001.SS",
@@ -37,29 +37,24 @@ nome_to_ticker = {
     "Intesa Sanpaolo": "ISP.MI",
     "UniCredit": "UCG.MI",
     "Ferrari": "RACE.MI",
-    "Fiat Chrysler": "STLA.MI",
+    "Stellantis": "STLA.MI",
     "Siemens": "SIE.DE",
     "SAP": "SAP.DE"
 }
 
 # Funzione fuzzy match
 def trova_ticker(input_nome, dizionario):
-    """
-    Cerca il nome più vicino nel dizionario e restituisce il ticker.
-    Se non trova niente di simile (>60% match), ritorna None.
-    """
-    nomi_dizionario = list(dizionario.keys())
-    match = difflib.get_close_matches(input_nome, nomi_dizionario, n=1, cutoff=0.6)
+    nomi = list(dizionario.keys())
+    match = difflib.get_close_matches(input_nome, nomi, n=1, cutoff=0.5)
     if match:
-        return dizionario[match[0]], match[0]  # ticker e nome trovato
+        return dizionario[match[0]], match[0]
     return None, None
 
-# Input utente
+# Input nomi
 lista_nomi = st.text_input(
     "Inserisci nomi di indici o azioni separati da virgola"
 ).title().split(",")
 
-# Converti nomi in ticker usando fuzzy match
 lista_tickers = []
 nomi_usati = []
 
@@ -79,7 +74,20 @@ if not lista_tickers:
 st.write("Ticker utilizzati:", lista_tickers)
 st.write("Nomi interpretati:", nomi_usati)
 
-# Seleziona periodo storico
+# Input pesi
+st.write("Inserisci i pesi percentuali per ciascun strumento (totale 100%)")
+pesi = []
+for n in nomi_usati:
+    peso = st.number_input(f"% di {n}", min_value=0.0, max_value=100.0, value=100.0/len(nomi_usati))
+    pesi.append(peso/100)
+
+# Normalizzazione automatica dei pesi
+pesi_arr = np.array(pesi)
+if np.sum(pesi_arr) != 1:
+    st.warning("I pesi non sommano a 100%, normalizzo automaticamente.")
+    pesi_arr /= np.sum(pesi_arr)
+
+# Selezione periodo
 periodo = st.selectbox(
     "Seleziona il periodo",
     ["1y", "3y", "5y", "10y", "max"]
@@ -89,71 +97,67 @@ if st.button("Analizza Portafoglio"):
 
     # Scarica dati
     df = yf.download(lista_tickers, period=periodo)
-
     if df.empty:
-        st.error("Nessun dato scaricato. Controlla i ticker o il periodo.")
+        st.error("Nessun dato scaricato!")
         st.stop()
 
-    # Gestione MultiIndex / singolo livello
+    # Selezione prezzi
     if isinstance(df.columns, pd.MultiIndex):
         if 'Adj Close' in df.columns.levels[0]:
             df = df.xs('Adj Close', axis=1, level=0)
         else:
             df = df.xs('Close', axis=1, level=0)
-            st.warning("Usando 'Close' al posto di 'Adj Close'")
+            st.warning("Uso 'Close' al posto di 'Adj Close'.")
     else:
-        if 'Adj Close' in df.columns:
-            df = df['Adj Close']
-        else:
-            df = df['Close']
-            st.warning("Usando 'Close' al posto di 'Adj Close'")
+        df = df['Adj Close'] if 'Adj Close' in df.columns else df['Close']
 
     st.subheader("Serie Storiche")
     st.line_chart(df)
 
-    # Rendimenti giornalieri
+    # Rendimenti e matrice di covarianza
     rendimenti = df.pct_change().dropna()
-    media_rendimenti = rendimenti.mean() * 252  # annualizzati
-    cov_matrix = rendimenti.cov() * 252         # annualizzata
+    mu = rendimenti.mean() * 252
+    sigma = rendimenti.cov() * 252
 
-    # Simulazione portafogli
+    # Portafoglio con pesi dati dall’utente
+    rend_port = np.dot(mu, pesi_arr)
+    vol_port = np.sqrt(np.dot(pesi_arr.T, np.dot(sigma, pesi_arr)))
+
+    st.subheader("Portafoglio Selettivo")
+    for i, nome in enumerate(nomi_usati):
+        st.write(f"{nome}: {pesi_arr[i]*100:.2f}%")
+    st.write(f"Rendimento atteso: **{rend_port:.2%}**")
+    st.write(f"Volatilità: **{vol_port:.2%}**")
+
+    # Simulazione Markowitz
     num_portfolios = 5000
-    risultati = np.zeros((3, num_portfolios))
+    results = np.zeros((3, num_portfolios))
     weights_record = []
 
     for i in range(num_portfolios):
-        pesi = np.random.random(len(lista_tickers))
-        pesi /= np.sum(pesi)
-        weights_record.append(pesi)
+        w = np.random.random(len(lista_tickers))
+        w /= np.sum(w)
+        weights_record.append(w)
+        results[0,i] = np.dot(mu, w)
+        results[1,i] = np.sqrt(np.dot(w.T, np.dot(sigma, w)))
+        results[2,i] = results[0,i] / results[1,i]
 
-        port_return = np.dot(pesi, media_rendimenti)
-        port_vol = np.sqrt(np.dot(pesi.T, np.dot(cov_matrix, pesi)))
-        sharpe = port_return / port_vol
-
-        risultati[0,i] = port_return
-        risultati[1,i] = port_vol
-        risultati[2,i] = sharpe
-
-    # Portafoglio massimo Sharpe
-    max_sharpe_idx = np.argmax(risultati[2])
-    pesi_max_sharpe = weights_record[max_sharpe_idx]
-    rendimento_max_sharpe = risultati[0,max_sharpe_idx]
-    volatilita_max_sharpe = risultati[1,max_sharpe_idx]
-
-    st.subheader("Portafoglio con massimo Sharpe Ratio")
-    for i, t in enumerate(lista_tickers):
-        st.write(f"{nomi_usati[i]} ({t}): {pesi_max_sharpe[i]*100:.2f}%")
-    st.write(f"Rendimento atteso: {rendimento_max_sharpe:.2%}")
-    st.write(f"Volatilità: {volatilita_max_sharpe:.2%}")
-    st.write(f"Sharpe Ratio: {risultati[2,max_sharpe_idx]:.2f}")
+    max_sharpe_idx = np.argmax(results[2])
+    w_star = weights_record[max_sharpe_idx]
+    st.subheader("Markowitz - Portafoglio Ottimale (Max Sharpe)")
+    for i, nome in enumerate(nomi_usati):
+        st.write(f"{nome}: {w_star[i]*100:.2f}%")
+    st.write(f"Rendimento Sharpe ottimale: **{results[0,max_sharpe_idx]:.2%}**")
+    st.write(f"Volatilità Sharpe ottimale: **{results[1,max_sharpe_idx]:.2%}**")
+    st.write(f"Sharpe Ratio: **{results[2,max_sharpe_idx]:.2f}**")
 
     # Grafico frontiera efficiente
     plt.figure(figsize=(10,6))
-    plt.scatter(risultati[1,:], risultati[0,:], c=risultati[2,:], cmap='viridis', marker='o', s=10, alpha=0.3)
+    plt.scatter(results[1,:], results[0,:], c=results[2,:], cmap='viridis', s=10, alpha=0.3)
     plt.colorbar(label='Sharpe Ratio')
-    plt.scatter(volatilita_max_sharpe, rendimento_max_sharpe, marker='*', color='r', s=500, label='Massimo Sharpe')
+    plt.scatter(results[1,max_sharpe_idx], results[0,max_sharpe_idx], marker='*', color='r', s=500, label='Massimo Sharpe')
+    plt.xlabel('Volatilità')
+    plt.ylabel('Rendimento')
     plt.title('Portafogli Simulati - Frontiera Efficiente')
-    plt.xlabel('Volatilità Annua')
-    plt.ylabel('Rendimento Atteso Annua')
     plt.legend()
     st.pyplot(plt)
