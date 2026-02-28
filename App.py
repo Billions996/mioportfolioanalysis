@@ -4,13 +4,32 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-st.title("Portafoglio di Markowitz (Frontiera Efficiente)")
+st.title("Portafoglio di Indici - Markowitz")
 
-# Input tickers
-lista_tickers = st.text_input(
-    "Inserisci i ticker separati da una virgola (es: AAPL,MSFT,GOOGL)"
-).upper().replace(" ", "").split(",")
-lista_tickers = [t for t in lista_tickers if t]
+# Dizionario Indici → ticker Yahoo Finance
+indici_to_ticker = {
+    "S&P 500": "^GSPC",
+    "NASDAQ 100": "^NDX",
+    "Dow Jones": "^DJI",
+    "FTSE 100": "^FTSE",
+    "DAX 30": "^GDAXI",
+    "Nikkei 225": "^N225",
+    "Hang Seng": "^HSI"
+}
+
+# Input utente
+lista_indici = st.text_input(
+    "Inserisci i nomi degli indici separati da virgola (es: S&P 500,NASDAQ 100,Dow Jones)"
+).title().split(",")
+
+# Converte nomi in ticker
+lista_tickers = []
+for nome in lista_indici:
+    nome = nome.strip()
+    if nome in indici_to_ticker:
+        lista_tickers.append(indici_to_ticker[nome])
+    elif nome != "":
+        st.warning(f"Indice '{nome}' non trovato nel dizionario.")
 
 periodo = st.selectbox(
     "Seleziona il periodo",
@@ -20,12 +39,12 @@ periodo = st.selectbox(
 if st.button("Genera Portafoglio di Markowitz"):
 
     if not lista_tickers:
-        st.error("Inserisci almeno un ticker valido.")
+        st.error("Inserisci almeno un indice valido.")
     else:
         # Scarica dati
         df = yf.download(lista_tickers, period=periodo)
 
-        # Se MultiIndex, seleziona 'Adj Close' o 'Close'
+        # Gestione MultiIndex o singolo livello
         if isinstance(df.columns, pd.MultiIndex):
             if 'Adj Close' in df.columns.levels[0]:
                 df = df.xs('Adj Close', axis=1, level=0)
