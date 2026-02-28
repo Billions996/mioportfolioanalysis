@@ -164,7 +164,10 @@ if st.button("Analizza Portafoglio"):
         else:
             df = df['Close']
     else:
-        df = df['Adj Close'] if 'Adj Close' in df.columns else df['Close']
+        if 'Adj Close' in df.columns:
+            df = df['Adj Close']
+        else:
+            df = df['Close']
 
     st.subheader("Serie Storiche")
     st.line_chart(df)
@@ -176,8 +179,9 @@ if st.button("Analizza Portafoglio"):
     mu = rendimenti.mean() * 252
     sigma = rendimenti.cov() * 252
 
+    # Portafoglio utente con pesi personalizzati
     rend_port = np.dot(mu, pesi_arr)
-    vol_port = np.sqrt(np.dot(pesi_arr.T, np.dot(sigma, pesi_arr))
+    vol_port = np.sqrt(np.dot(pesi_arr.T, np.dot(sigma, pesi_arr)))
 
     st.subheader("Portafoglio Selettivo")
     for i, nome in enumerate(nomi_usati):
