@@ -17,15 +17,93 @@ st.set_page_config(
 st.title("Portfolio Completo Multilingua - Azioni, Obbligazioni, Materie Prime e Markowitz")
 
 # ==========================
-# Dizionario Nome → Ticker Yahoo Finance
-# (stesso di prima, non lo riscrivo tutto per brevità)
+# Dizionario Nome → Ticker Yahoo Finance (Italiano / Inglese)
 # ==========================
-nome_to_ticker = {...}  # inserisci tutto come nel codice precedente
+nome_to_ticker = {
+    # Indici
+    "S&P 500": "^GSPC",
+    "NASDAQ 100": "^NDX",
+    "Dow Jones": "^DJI",
+    "FTSE 100": "^FTSE",
+    "DAX 30": "^GDAXI",
+    "Nikkei 225": "^N225",
+    "Hang Seng": "^HSI",
+    "FTSE MIB": "FTSEMIB.MI",
+    "CAC 40": "^FCHI",
+    "IBEX 35": "^IBEX",
+    "MSCI Mondo": "URTH",
+    "MSCI World": "URTH",
+    "MSCI Mercati Emergenti": "EEM",
+    "MSCI Emerging Markets": "EEM",
+    "Euro Stoxx 50": "FEZ",
+    "Asia Pacifico sviluppati": "EPP",
+    "Asia Pacific Developed": "EPP",
+
+    # ETF obbligazionari
+    "Obbligazioni governative euro breve termine": "IBTS.DE",
+    "Euro Gov Bond Short Term": "IBTS.DE",
+    "Obbligazioni governative euro medio-lungo termine": "IBGL.DE",
+    "Euro Gov Bond Medium-Long": "IBGL.DE",
+    "Obbligazioni corporate euro breve termine": "IBCS.DE",
+    "Euro Corporate Bond Short Term": "IBCS.DE",
+    "Obbligazioni corporate euro medio-lungo termine": "IBCL.DE",
+    "Euro Corporate Bond Medium-Long": "IBCL.DE",
+    "Obbligazioni mercati emergenti": "EMB",
+    "Emerging Market Bond": "EMB",
+    "Obbligazioni governative giapponesi": "JPGB.L",
+    "Japanese Gov Bond": "JPGB.L",
+    "Obbligazioni governative inglesi": "IGLT.L",
+    "UK Gov Bond": "IGLT.L",
+
+    # ETF azionari
+    "Azioni Europa": "IEUR",
+    "Equity Euro": "IEUR",
+    "Azioni USA": "IVV",
+    "Equity USA": "IVV",
+    "Azioni mercati emergenti": "EEM",
+    "Equity Emerging": "EEM",
+    "Azioni Asia Pacifico sviluppati": "EPP",
+    "Equity Asia Pacific Developed": "EPP",
+
+    # Materie prime
+    "Oro": "GLD",
+    "Gold": "GLD",
+    "Argento": "SLV",
+    "Silver": "SLV",
+    "Petrolio WTI": "USO",
+    "Oil WTI": "USO",
+    "Rame": "CPER",
+    "Copper": "CPER",
+    "Agricoltura": "DBA",
+    "Agriculture": "DBA",
+
+    # Titoli USA
+    "Apple": "AAPL",
+    "Microsoft": "MSFT",
+    "Amazon": "AMZN",
+    "Alphabet": "GOOGL",
+    "Tesla": "TSLA",
+    "Meta": "META",
+    "NVIDIA": "NVDA",
+    "Netflix": "NFLX",
+
+    # Titoli Europa / Italia
+    "Enel": "ENEL.MI",
+    "Intesa Sanpaolo": "ISP.MI",
+    "UniCredit": "UCG.MI",
+    "Ferrari": "RACE.MI",
+    "Stellantis": "STLA.MI",
+    "Siemens": "SIE.DE",
+    "SAP": "SAP.DE"
+}
 
 # ==========================
-# Fuzzy matching
+# Funzione fuzzy match
 # ==========================
 def trova_ticker(input_nome, dizionario):
+    if not isinstance(dizionario, dict):
+        st.error("Errore: dizionario nome_to_ticker non definito correttamente!")
+        return None, None
     nomi = list(dizionario.keys())
     match = difflib.get_close_matches(input_nome, nomi, n=1, cutoff=0.5)
     if match:
@@ -56,6 +134,9 @@ for nome in lista_nomi_input:
 if not lista_tickers:
     st.stop()
 
+# ==========================
+# Pesi personalizzati
+# ==========================
 st.sidebar.subheader("Pesi (%) per strumento")
 pesi = []
 for n in nomi_usati:
@@ -68,11 +149,11 @@ if np.sum(pesi_arr) != 1:
 
 periodo = st.sidebar.selectbox("Periodo storico", ["1y","3y","5y","10y","max"])
 
+# ==========================
+# Analisi portafoglio
+# ==========================
 if st.sidebar.button("Analizza Portafoglio"):
 
-    # ==========================
-    # Scarica dati
-    # ==========================
     df = yf.download(lista_tickers, period=periodo)
     if df.empty:
         st.error("Nessun dato scaricato!")
@@ -91,11 +172,8 @@ if st.sidebar.button("Analizza Portafoglio"):
 
     nome_to_ticker_usati = dict(zip(nomi_usati, lista_tickers))
 
-    # ==========================
     # Prezzi normalizzati
-    # ==========================
     df_norm = df / df.iloc[0] * 100
-
     st.subheader("Prezzi Normalizzati")
     fig, ax = plt.subplots(figsize=(12,6))
     for nome in nomi_usati:
@@ -108,9 +186,7 @@ if st.sidebar.button("Analizza Portafoglio"):
     ax.legend(fontsize=12)
     st.pyplot(fig)
 
-    # ==========================
-    # Statistiche finanziarie
-    # ==========================
+    # Statistiche
     rendimenti_giornalieri = df.pct_change().dropna()
     rendimenti_annuali = rendimenti_giornalieri.mean() * 252
     vol_annuale = rendimenti_giornalieri.std() * np.sqrt(252)
@@ -122,9 +198,7 @@ if st.sidebar.button("Analizza Portafoglio"):
         "Volatilità Annualizzata": vol_annuale.values
     }, index=nomi_usati).sort_values("Rendimento Annualizzato", ascending=False)
 
-    # ==========================
-    # Layout colonne
-    # ==========================
+    # Colonne layout
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("Statistiche Finanziarie")
@@ -133,15 +207,12 @@ if st.sidebar.button("Analizza Portafoglio"):
             "Rendimento Annualizzato": "{:.2%}",
             "Volatilità Annualizzata": "{:.2%}"
         }))
-
     with col2:
         st.subheader("Matrice di Correlazione")
         correlazioni = rendimenti_giornalieri.corr()
         st.dataframe(correlazioni.style.background_gradient(cmap="coolwarm"))
 
-    # ==========================
     # Portafoglio selezionato
-    # ==========================
     mu = rendimenti_annuali
     sigma = rendimenti_giornalieri.cov() * 252
     rend_port = np.dot(mu, pesi_arr)
@@ -153,9 +224,7 @@ if st.sidebar.button("Analizza Portafoglio"):
     st.write(f"Rendimento atteso: **{rend_port:.2%}**")
     st.write(f"Volatilità: **{vol_port:.2%}**")
 
-    # ==========================
-    # Frontiera efficiente - grafico
-    # ==========================
+    # Frontiera efficiente
     num_portfolios = 50
     results = []
     for i in range(num_portfolios):
@@ -165,7 +234,6 @@ if st.sidebar.button("Analizza Portafoglio"):
         port_vol = np.sqrt(np.dot(w.T, np.dot(sigma, w)))
         sharpe = port_rend / port_vol
         results.append([port_vol, port_rend, sharpe, w])
-
     results = np.array(results)
     max_idx = np.argmax(results[:,2])
 
@@ -180,9 +248,7 @@ if st.sidebar.button("Analizza Portafoglio"):
     fig.colorbar(sc, label="Sharpe Ratio")
     st.pyplot(fig)
 
-    # ==========================
-    # Storico P/E Ratio
-    # ==========================
+    # Storico P/E
     st.subheader("Storico P/E Ratio")
     df_pe = pd.DataFrame()
     for nome in nomi_usati:
