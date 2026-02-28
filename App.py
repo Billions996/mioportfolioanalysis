@@ -3,8 +3,9 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import difflib
 
-st.title("Portfolio Analysis - Indici e Titoli con Markowitz")
+st.title("Portfolio di Indici e Titoli - Markowitz con Ricerca Fuzzy")
 
 # Dizionario: Nome → Ticker Yahoo Finance
 nome_to_ticker = {
@@ -41,24 +42,42 @@ nome_to_ticker = {
     "SAP": "SAP.DE"
 }
 
+# Funzione fuzzy match
+def trova_ticker(input_nome, dizionario):
+    """
+    Cerca il nome più vicino nel dizionario e restituisce il ticker.
+    Se non trova niente di simile (>60% match), ritorna None.
+    """
+    nomi_dizionario = list(dizionario.keys())
+    match = difflib.get_close_matches(input_nome, nomi_dizionario, n=1, cutoff=0.6)
+    if match:
+        return dizionario[match[0]], match[0]  # ticker e nome trovato
+    return None, None
+
 # Input utente
 lista_nomi = st.text_input(
     "Inserisci nomi di indici o azioni separati da virgola"
 ).title().split(",")
 
-# Converti nomi in ticker
+# Converti nomi in ticker usando fuzzy match
 lista_tickers = []
+nomi_usati = []
+
 for nome in lista_nomi:
     nome = nome.strip()
-    if nome in nome_to_ticker:
-        lista_tickers.append(nome_to_ticker[nome])
-    elif nome != "":
-        st.warning(f"Nome '{nome}' non trovato nel dizionario.")
+    if nome:
+        ticker, nome_trovato = trova_ticker(nome, nome_to_ticker)
+        if ticker:
+            lista_tickers.append(ticker)
+            nomi_usati.append(nome_trovato)
+        else:
+            st.warning(f"Nome '{nome}' non trovato nel dizionario.")
 
 if not lista_tickers:
     st.stop()
 
 st.write("Ticker utilizzati:", lista_tickers)
+st.write("Nomi interpretati:", nomi_usati)
 
 # Seleziona periodo storico
 periodo = st.selectbox(
@@ -123,7 +142,7 @@ if st.button("Analizza Portafoglio"):
 
     st.subheader("Portafoglio con massimo Sharpe Ratio")
     for i, t in enumerate(lista_tickers):
-        st.write(f"{t}: {pesi_max_sharpe[i]*100:.2f}%")
+        st.write(f"{nomi_usati[i]} ({t}): {pesi_max_sharpe[i]*100:.2f}%")
     st.write(f"Rendimento atteso: {rendimento_max_sharpe:.2%}")
     st.write(f"Volatilità: {volatilita_max_sharpe:.2%}")
     st.write(f"Sharpe Ratio: {risultati[2,max_sharpe_idx]:.2f}")
