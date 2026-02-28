@@ -1,8 +1,9 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
+import numpy as np
 
-st.title("Portfolio Analysis")
+st.title("Portfolio Analysis con Rendimenti e Volatilità")
 
 # Input dell'utente
 lista_tickers = st.text_input(
@@ -15,21 +16,26 @@ periodo = st.selectbox(
     ["1mo", "3mo", "6mo", "1y", "5y", "10y", "max"]
 )
 
-if st.button("Scarica dati"):
+# Pesatura portafoglio
+st.write("Inserisci la percentuale di ciascun titolo (totale deve fare 100%)")
+pesi = []
+if lista_tickers:
+    for t in lista_tickers:
+        peso = st.number_input(f"% di {t}", min_value=0.0, max_value=100.0, value=100.0/len(lista_tickers))
+        pesi.append(peso/100)  # converti in frazione
+
+if st.button("Analizza Portafoglio"):
     if not lista_tickers:
         st.error("Inserisci almeno un ticker valido.")
     else:
         try:
-            # Scarica dati da Yahoo Finance
+            # Scarica dati
             df = yf.download(lista_tickers, period=periodo)
-
-            # Mostra l'output grezzo per debug
-            st.write("Output grezzo da yfinance:", df)
 
             if df.empty:
                 st.error("Nessun dato scaricato. Controlla i ticker o il periodo.")
             else:
-                # Gestione MultiIndex
+                # Se MultiIndex, seleziona 'Adj Close'
                 if isinstance(df.columns, pd.MultiIndex):
                     df = df.xs('Adj Close', axis=1, level=0)
                 else:
@@ -39,9 +45,36 @@ if st.button("Scarica dati"):
                         st.error("Colonna 'Adj Close' non trovata")
                         st.stop()
 
-                st.success("Dati scaricati correttamente!")
+                st.subheader("Serie Storiche")
                 st.dataframe(df)
                 st.line_chart(df)
 
+                # Rendimenti giornalieri
+                rendimenti_giornalieri = df.pct_change().dropna()
+
+                # Rendimento medio annuo
+                rendimenti_medio_annuo = rendimenti_giornalieri.mean() * 252  # 252 giorni di trading
+
+                # Volatilità annua
+                volatilita_annua = rendimenti_giornalieri.std() * np.sqrt(252)
+
+                # Calcolo rendimento e volatilità portafoglio
+                pesi_array = np.array(pesi)
+                rend_portafoglio = np.dot(rendimenti_medio_annuo, pesi_array)
+                cov_matrix = rendimenti_giornalieri.cov() * 252
+                volatilita_portafoglio = np.sqrt(np.dot(pesi_array.T, np.dot(cov_matrix, pesi_array)))
+
+                # Mostra risultati
+                st.subheader("Rendimenti e Volatilità Titoli")
+                tabella_titoli = pd.DataFrame({
+                    "Rendimento Medio Annuo": rendimenti_medio_annuo,
+                    "Volatilità Annua": volatilita_annua
+                })
+                st.dataframe(tabella_titoli)
+
+                st.subheader("Rendimenti e Volatilità Portafoglio")
+                st.write(f"Rendimento atteso portafoglio: {rend_portafoglio:.2%}")
+                st.write(f"Volatilità portafoglio: {volatilita_portafoglio:.2%}")
+
         except Exception as e:
-            st.error(f"Errore durante il download dei dati: {e}")
+            st.error(f"Errore durante l'analisi: {e}")
