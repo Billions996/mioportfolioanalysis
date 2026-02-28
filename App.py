@@ -11,7 +11,6 @@ st.title("Portfolio Completo Multilingua - Azioni, Obbligazioni, Materie Prime e
 # Dizionario Nome → Ticker Yahoo Finance (Italiano / Inglese)
 # ==========================
 nome_to_ticker = {
-    # INDICI AZIONARI
     "S&P 500": "^GSPC",
     "NASDAQ 100": "^NDX",
     "Dow Jones": "^DJI",
@@ -29,30 +28,22 @@ nome_to_ticker = {
     "Euro Stoxx 50": "FEZ",
     "Asia Pacifico sviluppati": "EPP",
     "Asia Pacific Developed": "EPP",
-
-    # ETF OBBLIGAZIONARI - GOVERNATIVI EURO
+    # ETF OBBLIGAZIONARI
     "Obbligazioni governative euro breve termine": "IBTS.DE",
     "Euro Gov Bond Short Term": "IBTS.DE",
     "Obbligazioni governative euro medio-lungo termine": "IBGL.DE",
     "Euro Gov Bond Medium-Long": "IBGL.DE",
-
-    # ETF OBBLIGAZIONARI - CORPORATE EURO
     "Obbligazioni corporate euro breve termine": "IBCS.DE",
     "Euro Corporate Bond Short Term": "IBCS.DE",
     "Obbligazioni corporate euro medio-lungo termine": "IBCL.DE",
     "Euro Corporate Bond Medium-Long": "IBCL.DE",
-
-    # ETF OBBLIGAZIONARI - EMERGING
     "Obbligazioni mercati emergenti": "EMB",
     "Emerging Market Bond": "EMB",
-
-    # ETF OBBLIGAZIONARI - GIAPPONE/UK
     "Obbligazioni governative giapponesi": "JPGB.L",
     "Japanese Gov Bond": "JPGB.L",
     "Obbligazioni governative inglesi": "IGLT.L",
     "UK Gov Bond": "IGLT.L",
-
-    # ETF AZIONARI - EURO/USA/EMERGING/ASIA PACIFICO
+    # ETF AZIONARI
     "Azioni Europa": "IEUR",
     "Equity Euro": "IEUR",
     "Azioni USA": "IVV",
@@ -61,8 +52,7 @@ nome_to_ticker = {
     "Equity Emerging": "EEM",
     "Azioni Asia Pacifico sviluppati": "EPP",
     "Equity Asia Pacific Developed": "EPP",
-
-    # MATERIE PRIME
+    # Materie prime
     "Oro": "GLD",
     "Gold": "GLD",
     "Argento": "SLV",
@@ -73,8 +63,7 @@ nome_to_ticker = {
     "Copper": "CPER",
     "Agricoltura": "DBA",
     "Agriculture": "DBA",
-
-    # TITOLI USA
+    # Titoli USA
     "Apple": "AAPL",
     "Microsoft": "MSFT",
     "Amazon": "AMZN",
@@ -83,8 +72,7 @@ nome_to_ticker = {
     "Meta": "META",
     "NVIDIA": "NVDA",
     "Netflix": "NFLX",
-
-    # TITOLI EUROPA / ITALIA
+    # Titoli Europa / Italia
     "Enel": "ENEL.MI",
     "Intesa Sanpaolo": "ISP.MI",
     "UniCredit": "UCG.MI",
@@ -151,7 +139,7 @@ periodo = st.selectbox("Seleziona il periodo storico", ["1y","3y","5y","10y","ma
 if st.button("Analizza Portafoglio"):
 
     # ==========================
-    # Scarica dati senza warning
+    # Scarica dati
     # ==========================
     df = yf.download(lista_tickers, period=periodo)
     if df.empty:
@@ -170,28 +158,37 @@ if st.button("Analizza Portafoglio"):
             df = df['Close']
 
     # ==========================
-    # Grafico prezzi normalizzati a 100
+    # Mapping nome -> ticker per grafico e statistiche
     # ==========================
-    df_norm = df / df.iloc[0] * 100
-    st.subheader("Grafico Prezzi Normalizzati (Punto di Partenza = 100)")
-    st.line_chart(df_norm)
+    nome_to_ticker_usati = dict(zip(nomi_usati, lista_tickers))
 
     # ==========================
-    # Calcolo rendimenti cumulati, annualizzati, volatilità
+    # Prezzi normalizzati
+    # ==========================
+    df_norm = df / df.iloc[0] * 100
+    plt.figure(figsize=(10,6))
+    for nome in nomi_usati:
+        ticker = nome_to_ticker_usati[nome]
+        plt.plot(df_norm.index, df_norm[ticker], label=nome)
+    plt.xlabel("Data")
+    plt.ylabel("Prezzo Normalizzato")
+    plt.title("Evoluzione Prezzi Normalizzati")
+    plt.legend()
+    st.pyplot(plt)
+
+    # ==========================
+    # Statistiche finanziarie
     # ==========================
     rendimenti_giornalieri = df.pct_change().dropna()
     rendimenti_annuali = rendimenti_giornalieri.mean() * 252
     vol_annuale = rendimenti_giornalieri.std() * np.sqrt(252)
-
-    # Rendimento cumulato
     rendimento_cumulato = (df.iloc[-1] / df.iloc[0]) - 1
 
-    # DataFrame statistico
     df_statistiche = pd.DataFrame({
         "Rendimento Cumulato": rendimento_cumulato,
         "Rendimento Annualizzato": rendimenti_annuali,
         "Volatilità Annualizzata": vol_annuale
-    }).sort_values("Rendimento Annualizzato", ascending=False)
+    }, index=nomi_usati).sort_values("Rendimento Annualizzato", ascending=False)
 
     st.subheader("Statistiche Finanziarie")
     st.dataframe(df_statistiche.style.format({
@@ -223,7 +220,7 @@ if st.button("Analizza Portafoglio"):
     st.write(f"Volatilità: **{vol_port:.2%}**")
 
     # ==========================
-    # Frontiera efficiente - 50 portafogli
+    # Frontiera efficiente (50 portafogli)
     # ==========================
     num_portfolios = 50
     results = []
@@ -240,7 +237,6 @@ if st.button("Analizza Portafoglio"):
 
     df_frontiera = pd.DataFrame(results, columns=["Rendimento", "Volatilità", "Sharpe"])
     df_frontiera["Peso"] = weights_record
-
     max_sharpe_idx = df_frontiera["Sharpe"].idxmax()
     df_frontiera["Massimo Sharpe"] = ""
     df_frontiera.loc[max_sharpe_idx, "Massimo Sharpe"] = "⭐"
@@ -251,15 +247,3 @@ if st.button("Analizza Portafoglio"):
         "Volatilità": "{:.2%}",
         "Sharpe": "{:.2f}"
     }))
-
-    # ==========================
-    # Grafico frontiera efficiente con nomi completi
-    # ==========================
-    plt.figure(figsize=(10,6))
-    for i, nome in enumerate(nomi_usati):
-        plt.plot(df_norm.index, df_norm[nome], label=nome)
-    plt.xlabel("Data")
-    plt.ylabel("Prezzo Normalizzato")
-    plt.title("Evoluzione Prezzi Normalizzati")
-    plt.legend()
-    st.pyplot(plt)
